@@ -1,35 +1,148 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+import "./App.css";
+import { DataList } from './interface/Users.type';
+import DataContainer from './components/DataContainer';
+import React, { useEffect, useState } from 'react';
 
-function App() {
-  const [count, setCount] = useState(0)
+const App: React.FC = () => {
+    const [users, setUsers] = useState<DataList[]>([]);
+    const [fetchStatus, setFetchStatus] = useState<string>('');
+    const formik = useFormik({
+        initialValues: {
+            keywords: '',
+            loading: false,
+            submited: false
+        },
+        validationSchema: Yup.object({
+            keywords: Yup.string().required('Please type something'),
+        }),
+        onSubmit: () => {
+            formik.setFieldValue('submited', true)
+            formik.setFieldValue('loading', true);
+            fetchUsers();
+        },
+    });
 
-  return (
-    <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    const handleChanges = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        formik.handleChange(e)
+    }
+
+    const fetchUsers = async (): Promise<void> => {
+        try {
+            setUsers([]);
+            const response = await fetch(`https://api.github.com/search/users?q=${formik.values.keywords}`);
+            const data = await response.json();
+            const dummyData: DataList[] = [];
+            switch (response.status) {
+                case 304:
+                case 422:
+                case 503:
+                    setFetchStatus(response.statusText);
+                    break;
+
+                default:
+                    if (data && data.total_count) {
+                        data.items.map((val: { login: string; repos_url: string; }) => {
+                            dummyData.push({
+                                login: val.login,
+                                repos_url: val.repos_url
+                            })
+                        })
+
+                        setUsers(dummyData);
+                    }
+                    setFetchStatus('');
+                    break;
+            }
+            formik.setFieldValue('loading', false);
+            formik.setFieldValue('submited', false);
+        } catch (error) {
+            formik.setFieldValue('loading', false);
+            formik.setFieldValue('submited', false)
+            console.error(error);
+        }
+    };
+
+    useEffect(() => {
+        if (formik.values.keywords) {
+            const delay = setTimeout(() => {
+                formik.setFieldValue('loading', true);
+                fetchUsers();
+            }, 1000)
+
+            return () => {
+                clearTimeout(delay);
+            }
+        }
+    }, [formik.values.keywords]);
+
+    useEffect(() => {
+        const delay = setTimeout(() => {
+            setFetchStatus('')
+        }, 3000)
+
+        return () => {
+            clearTimeout(delay);
+        }
+    }, [fetchStatus])
+
+    return (
+        <>
+            {formik.values.loading === false && fetchStatus && (
+                <div id="toast-warning" className="flex items-center w-full max-w-xs p-4 text-gray-500 bg-white rounded-lg shadow dark:text-gray-400 dark:bg-gray-800" role="alert">
+                    <div className="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-orange-500 bg-orange-100 rounded-lg dark:bg-orange-700 dark:text-orange-200">
+                        <svg aria-hidden="true" className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
+                        <span className="sr-only">Warning icon</span>
+                    </div>
+                    <div className="ml-3 text-sm font-normal text-red-400 dark:text-white">{fetchStatus}</div>
+                    <button
+                        type="button"
+                        className="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700"
+                        aria-label="Close"
+                        onClick={() => setFetchStatus('')}
+                    >
+                        <span className="sr-only">Close</span>
+                        <svg aria-hidden="true" className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                    </button>
+                </div>
+            )}
+            <div className="p-5">
+                <form onSubmit={formik.handleSubmit} >
+                    <div className="flex items-start flex-col sm:flex-row">
+                        <div className="relative w-full">
+                            <input
+                                type="text"
+                                id="keywords"
+                                name="keywords"
+                                className="input-search"
+                                placeholder="Enter Username"
+                                autoComplete="off"
+                                required
+                                onChange={handleChanges}
+                                value={formik.values.keywords}
+                            />
+                            {formik.touched.keywords && formik.errors.keywords ? (
+                                <p className="text-sm text-red-400 dark:text-white">{formik.errors.keywords}</p>
+                            ) : null}
+                        </div>
+                        <div className='relative w-full sm:w-40'>
+                            <button type="submit" className="btn-search" disabled={formik.values.submited}>
+                                Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                {formik.values.loading === true && (
+                    <div role="status" className="animate-pulse mt-3">
+                        <div className="h-3 bg-gray-200 rounded dark:bg-gray-700 w-full mb-2"></div>
+                        <div className="h-12 bg-gray-200 rounded dark:bg-gray-700 w-full mb-2"></div>
+                    </div>
+                )}
+                {formik.values.loading === false && users.length > 0 && (<DataContainer keyword={formik.values.keywords} dataList={users} />)}
+            </div>
+        </>
+    )
 }
 
 export default App
